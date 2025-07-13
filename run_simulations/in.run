@@ -1,0 +1,73 @@
+# ------------------------ INITIALIZATION ----------------------------
+units 		metal
+dimension	3
+boundary	p	p	p
+atom_style	atomic
+variable    latparam equal 4.05
+
+# ----------------------- ATOM DEFINITION ----------------------------
+
+lattice		fcc ${latparam}
+region		whole prism 0 1 0 1 0 1 0 0 0
+create_box	1 whole
+
+read_dump	/efs-mount/dump.minim_full.428 428 x y z vx vy vz add yes
+
+# ------------------------ FORCE FIELDS ------------------------------
+
+pair_style	eam/alloy
+pair_coeff  * * /efs-mount/LAMMPS/lammps-patch_15Jun2023/potentials/Al99.eam.alloy Al
+
+# ---------------------------- CNA -----------------------------------
+
+variable	cutoffcna equal 0.8536*${latparam}
+region		focus block -130 -30 INF INF -65 65 units box
+group		focus region focus
+compute 	CNA focus cna/atom ${cutoffcna}
+
+# -------------------- LOG THERMODYNAMICS ----------------------------
+
+thermo		100
+thermo_style custom step cpu temp pxx pyy pzz pxy pxz pyz press
+
+# ------------------------ WARM UP T&P -------------------------------
+
+# reset time due to minimization of starter dump file
+reset_timestep 0
+# set initial temperature 2 x target temperature (equipartition)
+variable                T0 equal 2*${TEMP}
+velocity                all create ${T0} ${rand} mom yes rot no dist gaussian
+# ramp up selected stress component to target value
+fix 1 all npt temp ${TEMP} ${TEMP} 0.05 tri 0 0 1 drag 1 xz 0 ${STRESS} 1
+# run 2.5 ps to steady state
+
+######## here b/c testing #######
+dump 1 all custom 500 ./output/dump.others_run${rand}.* id type xs ys zs
+dump 2 focus custom 10 ./output/dump.full_run${rand}.*.gz id type xs ys zs
+dump_modify     1 thresh c_CNA == 2
+#################################
+
+run 2500
+
+# ---------------------------- MD ------------------------------------
+
+unfix 1
+reset_timestep 0
+
+############## un-comment for production mode ##############
+#dump 1 all custom 500 ./output/dump.others_run${rand}.* id type xs ys zs
+#dump 2 focus custom 10 ./output/dump.full_run${rand}.*.gz id type xs ys zs
+#dump_modify     1 thresh c_CNA == 2
+############################################################
+
+fix 1 all npt temp ${TEMP} ${TEMP} 0.05 tri 0 0 1 drag 1 xz ${STRESS} ${STRESS} 1
+
+variable quit atom c_CNA==2
+compute quit all reduce sum v_quit
+variable quitpr equal c_quit
+
+fix 2 all halt 1000 v_quitpr > 4000
+write_restart 5000 ./output/restart_run${rand}
+run 500000 pre no post no every 5000 "if '${quitpr} < 300' then 'print ${quitpr}' quit"
+
+print "All done"

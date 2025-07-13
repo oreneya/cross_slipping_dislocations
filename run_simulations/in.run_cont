@@ -1,0 +1,56 @@
+# ------------------------ INITIALIZATION ----------------------------
+
+variable latparam equal 4.05
+
+# ----------------------- ATOM DEFINITION ----------------------------
+
+read_restart	./output/restart_run${rand}
+
+# ------------------------ FORCE FIELDS ------------------------------
+
+pair_style	eam/alloy
+pair_coeff      * * /efs-mount/LAMMPS/lammps-patch_15Jun2023/potentials/Al99.eam.alloy Al
+
+###############################################################
+#-------compute&output dislocation's position data------------#
+###############################################################
+
+
+#---Cutoff for CNA calc.---#
+#--------------------------#
+
+variable	cutoffcna equal 0.8536*${latparam}
+
+#---Define regions of movement for CNA calc. efficiency---#
+#---------------------------------------------------------#
+
+region		focus block -130 -30 INF INF -65 65 units box
+
+group		focus region focus
+
+compute 	CNA focus cna/atom ${cutoffcna}
+
+
+###############################################################
+
+# MD
+thermo		100
+thermo_style custom step cpu temp pxx pyy pzz pxy pxz pyz press
+
+# ---------------------- run ----------------------------------
+
+dump 1 all custom 500 ./output/dump.others_run${rand}.* id type xs ys zs
+dump 2 focus custom 10 ./output/dump.full_run${rand}.* id type xs ys zs
+dump_modify     1 thresh c_CNA == 2
+
+fix 1 all npt temp ${TEMP} ${TEMP} 0.05 tri 0 0 1 drag 1 xz ${STRESS} ${STRESS} 1
+
+variable quit atom c_CNA==2
+compute quit all reduce sum v_quit
+variable quitpr equal c_quit
+
+fix 2 all halt  1000 v_quitpr > 4000
+write_restart	5000 ./output/restart_run${rand}
+run 500000 upto every 5000 "if '${quitpr} < 300' then 'print ${quitpr}' quit"
+
+print "All done"
