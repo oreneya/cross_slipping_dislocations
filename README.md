@@ -1,5 +1,5 @@
-# cross_slipping_dislocations
-Show parts of the cross-slipping dislocations research
+# Cross-slipping dislocations
+This repo contains the core parts of my cross-slipping dislocations research. Auxilray parts, including data across the pipline, remain hosted elsewhere.
 
 ## Research calculations workflow
 1. Design atom scale simulations
@@ -8,5 +8,4 @@ Show parts of the cross-slipping dislocations research
 4. Extract via OVITO's API the dislocations analysis data into numpy *.npy data files
 5. Analyse and visualize
 
-## Purpose
-To expose some of the core of my research in the field of dislocations.
+## Example of a processed simulation and a few statistical analyses of it![processed simulation](graphical_abstract_snapshot.png)
